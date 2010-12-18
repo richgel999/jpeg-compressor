@@ -1,6 +1,6 @@
 // jpge.cpp - C++ class for JPEG compression.
 // Public domain, Rich Geldreich <richgel99@gmail.com>
-// Last updated Dec. 18, 2010
+// v1.00 - Last updated Dec. 18, 2010
 // Note: The current DCT function was derived from an old version of libjpeg.
 
 #include "jpge.h"
