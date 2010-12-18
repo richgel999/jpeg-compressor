@@ -21,7 +21,7 @@ int main(int arg_c, char* Parg_v[])
 
    if (arg_c != 4)
    {
-      printf("Usage: jpg2tga <sourcefile> <destfile> <quality_factor>\n");
+      printf("Usage: jpge <sourcefile> <destfile> <quality_factor>\n");
       printf("sourcefile: Source image file, in any format stb_image.c supports.\n");
       printf("destfile: Destination JPEG file.\n");
       printf("quality_factor: 1-100, higher=better\n");
