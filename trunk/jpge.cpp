@@ -1,7 +1,6 @@
 // jpge.cpp - C++ class for JPEG compression.
 // Public domain, Rich Geldreich <richgel99@gmail.com>
-// v1.00 - Last updated Dec. 18, 2010
-// Note: The current DCT function was derived from an old version of libjpeg.
+// v1.01 - Last updated Dec. 18, 2010
 
 #include "jpge.h"
 
@@ -99,113 +98,42 @@ static void Y_to_YCC(uint8* Pdst, const uint8* src, int num_pixels)
   for( ; num_pixels; Pdst += 3, src++, num_pixels--) { Pdst[0] = src[0]; Pdst[1] = 128; Pdst[2] = 128; }
 }
 
-// Forward DCT
-#define CONST_BITS 13
-#define PASS1_BITS 2
-#define FIX_0_298631336 ((int32)2446)    /* FIX(0.298631336) */
-#define FIX_0_390180644 ((int32)3196)    /* FIX(0.390180644) */
-#define FIX_0_541196100 ((int32)4433)    /* FIX(0.541196100) */
-#define FIX_0_765366865 ((int32)6270)    /* FIX(0.765366865) */
-#define FIX_0_899976223 ((int32)7373)    /* FIX(0.899976223) */
-#define FIX_1_175875602 ((int32)9633)    /* FIX(1.175875602) */
-#define FIX_1_501321110 ((int32)12299)   /* FIX(1.501321110) */
-#define FIX_1_847759065 ((int32)15137)   /* FIX(1.847759065) */
-#define FIX_1_961570560 ((int32)16069)   /* FIX(1.961570560) */
-#define FIX_2_053119869 ((int32)16819)   /* FIX(2.053119869) */
-#define FIX_2_562915447 ((int32)20995)   /* FIX(2.562915447) */
-#define FIX_3_072711026 ((int32)25172)   /* FIX(3.072711026) */
+// Forward DCT - DCT derived from jfdctint.
+enum { CONST_BITS = 13, ROW_BITS = 2 };
 #define DCT_DESCALE(x, n) (((x) + (((int32)1) << ((n) - 1))) >> (n))
-#define DCT_MUL(var, const)  (((int16) (var)) * ((int32) (const)))
+#define DCT_MUL(var, c) (static_cast<int16>(var) * static_cast<int32>(c))
+#define DCT1D(s0, s1, s2, s3, s4, s5, s6, s7) \
+  int32 t0 = s0 + s7, t7 = s0 - s7, t1 = s1 + s6, t6 = s1 - s6, t2 = s2 + s5, t5 = s2 - s5, t3 = s3 + s4, t4 = s3 - s4; \
+  int32 t10 = t0 + t3, t13 = t0 - t3, t11 = t1 + t2, t12 = t1 - t2; \
+  int32 u1 = DCT_MUL(t12 + t13, 4433); \
+  s2 = u1 + DCT_MUL(t13, 6270); \
+  s6 = u1 + DCT_MUL(t12, -15137); \
+  u1 = t4 + t7; \
+  int32 u2 = t5 + t6, u3 = t4 + t6, u4 = t5 + t7; \
+  int32 z5 = DCT_MUL(u3 + u4, 9633); \
+  t4 = DCT_MUL(t4, 2446); t5 = DCT_MUL(t5, 16819); \
+  t6 = DCT_MUL(t6, 25172); t7 = DCT_MUL(t7, 12299); \
+  u1 = DCT_MUL(u1, -7373); u2 = DCT_MUL(u2, -20995); \
+  u3 = DCT_MUL(u3, -16069); u4 = DCT_MUL(u4, -3196); \
+  u3 += z5; u4 += z5; \
+  s0 = t10 + t11; s1 = t7 + u1 + u4; s3 = t6 + u2 + u3; s4 = t10 - t11; s5 = t5 + u2 + u4; s7 = t4 + u1 + u3;
 
-static void dct(int32 *data)
+static void DCT2D(int32 *p)
 {
-  int c;
-  int32 z1, z2, z3, z4, z5, tmp0, tmp1, tmp2, tmp3, tmp4, tmp5, tmp6, tmp7, tmp10, tmp11, tmp12, tmp13, *data_ptr;
-
-  data_ptr = data;
-
-  for (c = 7; c >= 0; c--)
+  int32 c, *q = p;
+  for (c = 7; c >= 0; c--, q += 8)
   {
-    tmp0 = data_ptr[0] + data_ptr[7];
-    tmp7 = data_ptr[0] - data_ptr[7];
-    tmp1 = data_ptr[1] + data_ptr[6];
-    tmp6 = data_ptr[1] - data_ptr[6];
-    tmp2 = data_ptr[2] + data_ptr[5];
-    tmp5 = data_ptr[2] - data_ptr[5];
-    tmp3 = data_ptr[3] + data_ptr[4];
-    tmp4 = data_ptr[3] - data_ptr[4];
-    tmp10 = tmp0 + tmp3;
-    tmp13 = tmp0 - tmp3;
-    tmp11 = tmp1 + tmp2;
-    tmp12 = tmp1 - tmp2;
-    data_ptr[0] = (int32)((tmp10 + tmp11) << PASS1_BITS);
-    data_ptr[4] = (int32)((tmp10 - tmp11) << PASS1_BITS);
-    z1 = DCT_MUL(tmp12 + tmp13, FIX_0_541196100);
-    data_ptr[2] = (int32)DCT_DESCALE(z1 + DCT_MUL(tmp13, FIX_0_765366865), CONST_BITS-PASS1_BITS);
-    data_ptr[6] = (int32)DCT_DESCALE(z1 + DCT_MUL(tmp12, - FIX_1_847759065), CONST_BITS-PASS1_BITS);
-    z1 = tmp4 + tmp7;
-    z2 = tmp5 + tmp6;
-    z3 = tmp4 + tmp6;
-    z4 = tmp5 + tmp7;
-    z5 = DCT_MUL(z3 + z4, FIX_1_175875602);
-    tmp4 = DCT_MUL(tmp4, FIX_0_298631336);
-    tmp5 = DCT_MUL(tmp5, FIX_2_053119869);
-    tmp6 = DCT_MUL(tmp6, FIX_3_072711026);
-    tmp7 = DCT_MUL(tmp7, FIX_1_501321110);
-    z1   = DCT_MUL(z1, -FIX_0_899976223);
-    z2   = DCT_MUL(z2, -FIX_2_562915447);
-    z3   = DCT_MUL(z3, -FIX_1_961570560);
-    z4   = DCT_MUL(z4, -FIX_0_390180644);
-    z3 += z5;
-    z4 += z5;
-    data_ptr[7] = (int32)DCT_DESCALE(tmp4 + z1 + z3, CONST_BITS-PASS1_BITS);
-    data_ptr[5] = (int32)DCT_DESCALE(tmp5 + z2 + z4, CONST_BITS-PASS1_BITS);
-    data_ptr[3] = (int32)DCT_DESCALE(tmp6 + z2 + z3, CONST_BITS-PASS1_BITS);
-    data_ptr[1] = (int32)DCT_DESCALE(tmp7 + z1 + z4, CONST_BITS-PASS1_BITS);
-    data_ptr += 8;
+    int32 s0 = q[0], s1 = q[1], s2 = q[2], s3 = q[3], s4 = q[4], s5 = q[5], s6 = q[6], s7 = q[7];
+    DCT1D(s0, s1, s2, s3, s4, s5, s6, s7);
+    q[0] = s0 << ROW_BITS; q[1] = DCT_DESCALE(s1, CONST_BITS-ROW_BITS); q[2] = DCT_DESCALE(s2, CONST_BITS-ROW_BITS); q[3] = DCT_DESCALE(s3, CONST_BITS-ROW_BITS); 
+    q[4] = s4 << ROW_BITS; q[5] = DCT_DESCALE(s5, CONST_BITS-ROW_BITS); q[6] = DCT_DESCALE(s6, CONST_BITS-ROW_BITS); q[7] = DCT_DESCALE(s7, CONST_BITS-ROW_BITS); 
   }
-
-  data_ptr = data;
-
-  for (c = 7; c >= 0; c--)
+  for (q = p, c = 7; c >= 0; c--, q++)
   {
-    tmp0 = data_ptr[8*0] + data_ptr[8*7];
-    tmp7 = data_ptr[8*0] - data_ptr[8*7];
-    tmp1 = data_ptr[8*1] + data_ptr[8*6];
-    tmp6 = data_ptr[8*1] - data_ptr[8*6];
-    tmp2 = data_ptr[8*2] + data_ptr[8*5];
-    tmp5 = data_ptr[8*2] - data_ptr[8*5];
-    tmp3 = data_ptr[8*3] + data_ptr[8*4];
-    tmp4 = data_ptr[8*3] - data_ptr[8*4];
-    tmp10 = tmp0 + tmp3;
-    tmp13 = tmp0 - tmp3;
-    tmp11 = tmp1 + tmp2;
-    tmp12 = tmp1 - tmp2;
-    data_ptr[8*0] = (int32)DCT_DESCALE(tmp10 + tmp11, PASS1_BITS+3);
-    data_ptr[8*4] = (int32)DCT_DESCALE(tmp10 - tmp11, PASS1_BITS+3);
-    z1 = DCT_MUL(tmp12 + tmp13, FIX_0_541196100);
-    data_ptr[8*2] = (int32)DCT_DESCALE(z1 + DCT_MUL(tmp13, FIX_0_765366865), CONST_BITS+PASS1_BITS+3);
-    data_ptr[8*6] = (int32)DCT_DESCALE(z1 + DCT_MUL(tmp12, - FIX_1_847759065), CONST_BITS+PASS1_BITS+3);
-    z1 = tmp4 + tmp7;
-    z2 = tmp5 + tmp6;
-    z3 = tmp4 + tmp6;
-    z4 = tmp5 + tmp7;
-    z5 = DCT_MUL(z3 + z4, FIX_1_175875602);
-    tmp4 = DCT_MUL(tmp4, FIX_0_298631336);
-    tmp5 = DCT_MUL(tmp5, FIX_2_053119869);
-    tmp6 = DCT_MUL(tmp6, FIX_3_072711026);
-    tmp7 = DCT_MUL(tmp7, FIX_1_501321110);
-    z1   = DCT_MUL(z1, -FIX_0_899976223);
-    z2   = DCT_MUL(z2, -FIX_2_562915447);
-    z3   = DCT_MUL(z3, -FIX_1_961570560);
-    z4   = DCT_MUL(z4, -FIX_0_390180644);
-    z3 += z5;
-    z4 += z5;
-    data_ptr[8*7] = (int32)DCT_DESCALE(tmp4 + z1 + z3, CONST_BITS + PASS1_BITS + 3);
-    data_ptr[8*5] = (int32)DCT_DESCALE(tmp5 + z2 + z4, CONST_BITS + PASS1_BITS + 3);
-    data_ptr[8*3] = (int32)DCT_DESCALE(tmp6 + z2 + z3, CONST_BITS + PASS1_BITS + 3);
-    data_ptr[8*1] = (int32)DCT_DESCALE(tmp7 + z1 + z4, CONST_BITS + PASS1_BITS + 3);
-    data_ptr++;
+    int32 s0 = q[0*8], s1 = q[1*8], s2 = q[2*8], s3 = q[3*8], s4 = q[4*8], s5 = q[5*8], s6 = q[6*8], s7 = q[7*8];
+    DCT1D(s0, s1, s2, s3, s4, s5, s6, s7);
+    q[0*8] = DCT_DESCALE(s0, ROW_BITS+3); q[1*8] = DCT_DESCALE(s1, CONST_BITS+ROW_BITS+3); q[2*8] = DCT_DESCALE(s2, CONST_BITS+ROW_BITS+3); q[3*8] = DCT_DESCALE(s3, CONST_BITS+ROW_BITS+3); 
+    q[4*8] = DCT_DESCALE(s4, ROW_BITS+3); q[5*8] = DCT_DESCALE(s5, CONST_BITS+ROW_BITS+3); q[6*8] = DCT_DESCALE(s6, CONST_BITS+ROW_BITS+3); q[7*8] = DCT_DESCALE(s7, CONST_BITS+ROW_BITS+3); 
   }
 }
 
@@ -529,7 +457,6 @@ void jpeg_encoder::load_block_8_8_grey(int x)
   for (int i = 0; i < 8; i++, dst += 8)
   {
     src = m_mcu_lines[i] + x;
-
     dst[0] = src[0] - 128; dst[1] = src[1] - 128; dst[2] = src[2] - 128; dst[3] = src[3] - 128;
     dst[4] = src[4] - 128; dst[5] = src[5] - 128; dst[6] = src[6] - 128; dst[7] = src[7] - 128;
   }
@@ -546,7 +473,6 @@ void jpeg_encoder::load_block_8_8(int x, int y, int c)
   for (int i = 0; i < 8; i++, dst += 8)
   {
     src = m_mcu_lines[y + i] + x;
-
     dst[0] = src[0 * 3] - 128; dst[1] = src[1 * 3] - 128; dst[2] = src[2 * 3] - 128; dst[3] = src[3 * 3] - 128;
     dst[4] = src[4 * 3] - 128; dst[5] = src[5 * 3] - 128; dst[6] = src[6 * 3] - 128; dst[7] = src[7 * 3] - 128;
   }
@@ -564,16 +490,10 @@ void jpeg_encoder::load_block_16_8(int x, int c)
   {
     src1 = m_mcu_lines[i + 0] + x;
     src2 = m_mcu_lines[i + 1] + x;
-
-    dst[0] = ((src1[ 0 * 3] + src1[ 1 * 3] + src2[ 0 * 3] + src2[ 1 * 3] + a) >> 2) - 128;
-    dst[1] = ((src1[ 2 * 3] + src1[ 3 * 3] + src2[ 2 * 3] + src2[ 3 * 3] + b) >> 2) - 128;
-    dst[2] = ((src1[ 4 * 3] + src1[ 5 * 3] + src2[ 4 * 3] + src2[ 5 * 3] + a) >> 2) - 128;
-    dst[3] = ((src1[ 6 * 3] + src1[ 7 * 3] + src2[ 6 * 3] + src2[ 7 * 3] + b) >> 2) - 128;
-    dst[4] = ((src1[ 8 * 3] + src1[ 9 * 3] + src2[ 8 * 3] + src2[ 9 * 3] + a) >> 2) - 128;
-    dst[5] = ((src1[10 * 3] + src1[11 * 3] + src2[10 * 3] + src2[11 * 3] + b) >> 2) - 128;
-    dst[6] = ((src1[12 * 3] + src1[13 * 3] + src2[12 * 3] + src2[13 * 3] + a) >> 2) - 128;
-    dst[7] = ((src1[14 * 3] + src1[15 * 3] + src2[14 * 3] + src2[15 * 3] + b) >> 2) - 128;
-
+    dst[0] = ((src1[ 0 * 3] + src1[ 1 * 3] + src2[ 0 * 3] + src2[ 1 * 3] + a) >> 2) - 128; dst[1] = ((src1[ 2 * 3] + src1[ 3 * 3] + src2[ 2 * 3] + src2[ 3 * 3] + b) >> 2) - 128;
+    dst[2] = ((src1[ 4 * 3] + src1[ 5 * 3] + src2[ 4 * 3] + src2[ 5 * 3] + a) >> 2) - 128; dst[3] = ((src1[ 6 * 3] + src1[ 7 * 3] + src2[ 6 * 3] + src2[ 7 * 3] + b) >> 2) - 128;
+    dst[4] = ((src1[ 8 * 3] + src1[ 9 * 3] + src2[ 8 * 3] + src2[ 9 * 3] + a) >> 2) - 128; dst[5] = ((src1[10 * 3] + src1[11 * 3] + src2[10 * 3] + src2[11 * 3] + b) >> 2) - 128;
+    dst[6] = ((src1[12 * 3] + src1[13 * 3] + src2[12 * 3] + src2[13 * 3] + a) >> 2) - 128; dst[7] = ((src1[14 * 3] + src1[15 * 3] + src2[14 * 3] + src2[15 * 3] + b) >> 2) - 128;
     int temp = a; a = b; b = temp;
   }
 }
@@ -589,16 +509,10 @@ void jpeg_encoder::load_block_16_8_8(int x, int c)
   for (int i = 0; i < 8; i++, dst += 8)
   {
     src1 = m_mcu_lines[i + 0] + x;
-
-    dst[0] = ((src1[ 0 * 3] + src1[ 1 * 3] + a) >> 1) - 128;
-    dst[1] = ((src1[ 2 * 3] + src1[ 3 * 3] + b) >> 1) - 128;
-    dst[2] = ((src1[ 4 * 3] + src1[ 5 * 3] + a) >> 1) - 128;
-    dst[3] = ((src1[ 6 * 3] + src1[ 7 * 3] + b) >> 1) - 128;
-    dst[4] = ((src1[ 8 * 3] + src1[ 9 * 3] + a) >> 1) - 128;
-    dst[5] = ((src1[10 * 3] + src1[11 * 3] + b) >> 1) - 128;
-    dst[6] = ((src1[12 * 3] + src1[13 * 3] + a) >> 1) - 128;
-    dst[7] = ((src1[14 * 3] + src1[15 * 3] + b) >> 1) - 128;
-
+    dst[0] = ((src1[ 0 * 3] + src1[ 1 * 3] + a) >> 1) - 128; dst[1] = ((src1[ 2 * 3] + src1[ 3 * 3] + b) >> 1) - 128;
+    dst[2] = ((src1[ 4 * 3] + src1[ 5 * 3] + a) >> 1) - 128; dst[3] = ((src1[ 6 * 3] + src1[ 7 * 3] + b) >> 1) - 128;
+    dst[4] = ((src1[ 8 * 3] + src1[ 9 * 3] + a) >> 1) - 128; dst[5] = ((src1[10 * 3] + src1[11 * 3] + b) >> 1) - 128;
+    dst[6] = ((src1[12 * 3] + src1[13 * 3] + a) >> 1) - 128; dst[7] = ((src1[14 * 3] + src1[15 * 3] + b) >> 1) - 128;
     int temp = a; a = b; b = temp;
   }
 }
@@ -740,7 +654,7 @@ void jpeg_encoder::code_coefficients_pass_two(int component_num)
 
 void jpeg_encoder::code_block(int component_num)
 {
-  dct(m_sample_array);
+  DCT2D(m_sample_array);
   load_coefficients(component_num);
   code_coefficients_pass_two(component_num);
 }
@@ -777,10 +691,8 @@ void jpeg_encoder::process_mcu_row()
   {
     for (int i = 0; i < m_mcus_per_row; i++)
     {
-      load_block_8_8(i * 2 + 0, 0, 0); code_block(0);
-      load_block_8_8(i * 2 + 1, 0, 0); code_block(0);
-      load_block_8_8(i * 2 + 0, 1, 0); code_block(0);
-      load_block_8_8(i * 2 + 1, 1, 0); code_block(0);
+      load_block_8_8(i * 2 + 0, 0, 0); code_block(0); load_block_8_8(i * 2 + 1, 0, 0); code_block(0);
+      load_block_8_8(i * 2 + 0, 1, 0); code_block(0); load_block_8_8(i * 2 + 1, 1, 0); code_block(0);
       load_block_16_8(i, 1); code_block(1);
       load_block_16_8(i, 2); code_block(2);
     }
@@ -857,33 +769,21 @@ void jpeg_encoder::load_mcu(const void *src)
 void jpeg_encoder::clear()
 {
   m_num_components = 0;
-  m_image_x = 0;
-  m_image_y = 0;
-  m_image_bpp = 0;
-  m_image_bpl = 0;
-  m_image_x_mcu = 0;
-  m_image_y_mcu = 0;
-  m_image_bpl_xlt = 0;
-  m_image_bpl_mcu = 0;
+  m_image_x = 0; m_image_y = 0;
+  m_image_bpp = 0; m_image_bpl = 0;
+  m_image_x_mcu = 0; m_image_y_mcu = 0;
+  m_image_bpl_xlt = 0; m_image_bpl_mcu = 0;
   m_mcus_per_row = 0;
-  m_mcu_x = 0;
-  m_mcu_y = 0;
+  m_mcu_x = 0; m_mcu_y = 0;
   m_mcu_lines = NULL;
   m_mcu_y_ofs = 0;
-  m_sample_array = NULL;
-  m_coefficient_array = NULL;
-  m_out_buf = NULL;
-  m_out_buf_ofs = NULL;
-  m_out_buf_left = 0;
-  m_bit_buffer = 0;
+  m_sample_array = NULL; m_coefficient_array = NULL;
+  m_out_buf = NULL; m_out_buf_ofs = NULL;
+  m_out_buf_left = 0; m_bit_buffer = 0;
   m_bits_in = 0;
-  clear_obj(m_comp_h_samp);
-  clear_obj(m_comp_v_samp);
+  clear_obj(m_comp_h_samp); clear_obj(m_comp_v_samp);
   clear_obj(m_quantization_tables);
-  clear_obj(m_huff_codes);
-  clear_obj(m_huff_code_sizes);
-  clear_obj(m_huff_bits);
-  clear_obj(m_huff_val);
+  clear_obj(m_huff_codes); clear_obj(m_huff_code_sizes); clear_obj(m_huff_bits); clear_obj(m_huff_val);
   clear_obj(m_last_dc_val);
   m_all_stream_writes_succeeded = true;
 }
@@ -933,6 +833,7 @@ void jpeg_encoder::deinit()
     jpge_free(m_huff_bits[i]);
     jpge_free(m_huff_val[i]);
   }
+
   jpge_free(m_out_buf);
   clear();
 }
