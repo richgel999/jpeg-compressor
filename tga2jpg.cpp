@@ -46,7 +46,7 @@ int main(int arg_c, char* Parg_v[])
    uint8 *pImage_data = stbi_load(pSrc_filename, &width, &height, &actual_comps, req_comps);
    if (!pImage_data)
    {
-      printf("Failed loading file \"%s\"!", pSrc_filename);
+      printf("Failed loading file \"%s\"!\n", pSrc_filename);
       return EXIT_FAILURE;
    }
 
@@ -109,7 +109,7 @@ int main(int arg_c, char* Parg_v[])
    uint8 *pUncomp_image_data = stbi_load(pDst_filename, &uncomp_width, &uncomp_height, &uncomp_actual_comps, uncomp_req_comps);
    if (!pUncomp_image_data)
    {
-      printf("Failed loading compressed image file \"%s\"!", pSrc_filename);
+      printf("Failed loading compressed image file \"%s\"!\n", pDst_filename);
       return EXIT_FAILURE;
    }
 
