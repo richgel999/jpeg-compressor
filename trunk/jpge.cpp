@@ -1,6 +1,7 @@
 // jpge.cpp - C++ class for JPEG compression.
 // Public domain, Rich Geldreich <richgel99@gmail.com>
-// v1.01 - Last updated Dec. 18, 2010
+// v1.01, Dec. 18, 2010 - Initial release
+// v1.02, Apr. 6, 2011 - Removed 2x2 ordered dither in H2V1 chroma subsampling method jpeg_encoder::load_block_16_8_8(). (The rounding factor was 2, when it should have been 1. Either way, it wasn't helping.)
 
 #include "jpge.h"
 
@@ -504,16 +505,14 @@ void jpeg_encoder::load_block_16_8_8(int x, int c)
   sample_array_t *dst = m_sample_array;
 
   x = (x * (16 * 3)) + c;
-
-  int a = 0, b = 2;
+  
   for (int i = 0; i < 8; i++, dst += 8)
   {
     src1 = m_mcu_lines[i + 0] + x;
-    dst[0] = ((src1[ 0 * 3] + src1[ 1 * 3] + a) >> 1) - 128; dst[1] = ((src1[ 2 * 3] + src1[ 3 * 3] + b) >> 1) - 128;
-    dst[2] = ((src1[ 4 * 3] + src1[ 5 * 3] + a) >> 1) - 128; dst[3] = ((src1[ 6 * 3] + src1[ 7 * 3] + b) >> 1) - 128;
-    dst[4] = ((src1[ 8 * 3] + src1[ 9 * 3] + a) >> 1) - 128; dst[5] = ((src1[10 * 3] + src1[11 * 3] + b) >> 1) - 128;
-    dst[6] = ((src1[12 * 3] + src1[13 * 3] + a) >> 1) - 128; dst[7] = ((src1[14 * 3] + src1[15 * 3] + b) >> 1) - 128;
-    int temp = a; a = b; b = temp;
+    dst[0] = ((src1[ 0 * 3] + src1[ 1 * 3]) >> 1) - 128; dst[1] = ((src1[ 2 * 3] + src1[ 3 * 3]) >> 1) - 128;
+    dst[2] = ((src1[ 4 * 3] + src1[ 5 * 3]) >> 1) - 128; dst[3] = ((src1[ 6 * 3] + src1[ 7 * 3]) >> 1) - 128;
+    dst[4] = ((src1[ 8 * 3] + src1[ 9 * 3]) >> 1) - 128; dst[5] = ((src1[10 * 3] + src1[11 * 3]) >> 1) - 128;
+    dst[6] = ((src1[12 * 3] + src1[13 * 3]) >> 1) - 128; dst[7] = ((src1[14 * 3] + src1[15 * 3]) >> 1) - 128;
   }
 }
 
