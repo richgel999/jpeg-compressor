@@ -7,6 +7,14 @@
 #include <stdio.h>
 #include <setjmp.h>
 
+#ifdef _MSC_VER
+  #define JPGD_NORETURN __declspec(noreturn) 
+#elif defined(__GNUC__)
+  #define JPGD_NORETURN __attribute__ ((noreturn))
+#else
+  #define JPGD_NORETURN
+#endif
+
 namespace jpgd
 {
   typedef unsigned char  uint8;
@@ -248,7 +256,7 @@ namespace jpgd
     int m_total_bytes_read;
 
     void free_all_blocks();
-    void stop_decoding(jpgd_status status);
+    JPGD_NORETURN void stop_decoding(jpgd_status status);
     void *alloc(size_t n, bool zero = false);
     void word_clear(void *p, uint16 c, uint n);
     void prep_in_buffer();

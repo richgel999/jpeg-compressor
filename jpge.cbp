@@ -14,6 +14,7 @@
 				<Option compiler="gcc" />
 				<Option parameters="-x z_kodim07.png" />
 				<Compiler>
+					<Add option="-Wall" />
 					<Add option="-g" />
 				</Compiler>
 			</Target>
@@ -26,6 +27,7 @@
 				<Option parameters="-x z_kodim07.png" />
 				<Compiler>
 					<Add option="-O2" />
+					<Add option="-Wall" />
 				</Compiler>
 				<Linker>
 					<Add option="-s" />

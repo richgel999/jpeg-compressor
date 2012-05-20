@@ -1,6 +1,6 @@
 // tga2jpg.cpp - jpge/jpgd example command line app.
 // Public domain, Rich Geldreich <richgel99@gmail.com>
-// Last updated Apr. 15, 2011
+// Last updated May. 19, 2012
 
 // Note: jpge.cpp/h and jpgd.cpp/h are completely standalone, i.e. they do not have any dependencies to each other.
 #include "jpge.h"

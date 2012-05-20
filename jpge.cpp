@@ -1,9 +1,12 @@
 // jpge.cpp - C++ class for JPEG compression.
 // Public domain, Rich Geldreich <richgel99@gmail.com>
 // v1.01, Dec. 18, 2010 - Initial release
-// v1.02, Apr. 6, 2011 - Removed 2x2 ordered dither in H2V1 chroma subsampling method jpeg_encoder::load_block_16_8_8(). (The rounding factor was 2, when it should have been 1. Either way, it wasn't helping.)
+// v1.02, Apr. 6, 2011 - Removed 2x2 ordered dither in H2V1 chroma subsampling method load_block_16_8_8(). (The rounding factor was 2, when it should have been 1. Either way, it wasn't helping.)
 // v1.03, Apr. 16, 2011 - Added support for optimized Huffman code tables, optimized dynamic memory allocation down to only 1 alloc.
 //                        Also from Alex Evans: Added RGBA support, linear memory allocator (no longer needed in v1.03).
+// v1.04, May. 19, 2012: Forgot to set m_pFile ptr to NULL in cfile_stream::close(). Thanks to Owen Kaluza for reporting this bug.
+//                       Code tweaks to fix VS2008 static code analysis warnings (all looked harmless).
+//                       Code review revealed method load_block_16_8_8() (used for the non-default H2V1 sampling mode to downsample chroma) somehow didn't get the rounding factor fix from v1.02.
 
 #include "jpge.h"
 
@@ -555,15 +558,13 @@ void jpeg_encoder::load_block_16_8_8(int x, int c)
   uint8 *pSrc1;
   sample_array_t *pDst = m_sample_array;
   x = (x * (16 * 3)) + c;
-  int a = 0, b = 2;
   for (int i = 0; i < 8; i++, pDst += 8)
   {
     pSrc1 = m_mcu_lines[i + 0] + x;
-    pDst[0] = ((pSrc1[ 0 * 3] + pSrc1[ 1 * 3] + a) >> 1) - 128; pDst[1] = ((pSrc1[ 2 * 3] + pSrc1[ 3 * 3] + b) >> 1) - 128;
-    pDst[2] = ((pSrc1[ 4 * 3] + pSrc1[ 5 * 3] + a) >> 1) - 128; pDst[3] = ((pSrc1[ 6 * 3] + pSrc1[ 7 * 3] + b) >> 1) - 128;
-    pDst[4] = ((pSrc1[ 8 * 3] + pSrc1[ 9 * 3] + a) >> 1) - 128; pDst[5] = ((pSrc1[10 * 3] + pSrc1[11 * 3] + b) >> 1) - 128;
-    pDst[6] = ((pSrc1[12 * 3] + pSrc1[13 * 3] + a) >> 1) - 128; pDst[7] = ((pSrc1[14 * 3] + pSrc1[15 * 3] + b) >> 1) - 128;
-    int temp = a; a = b; b = temp;
+    pDst[0] = ((pSrc1[ 0 * 3] + pSrc1[ 1 * 3]) >> 1) - 128; pDst[1] = ((pSrc1[ 2 * 3] + pSrc1[ 3 * 3]) >> 1) - 128;
+    pDst[2] = ((pSrc1[ 4 * 3] + pSrc1[ 5 * 3]) >> 1) - 128; pDst[3] = ((pSrc1[ 6 * 3] + pSrc1[ 7 * 3]) >> 1) - 128;
+    pDst[4] = ((pSrc1[ 8 * 3] + pSrc1[ 9 * 3]) >> 1) - 128; pDst[5] = ((pSrc1[10 * 3] + pSrc1[11 * 3]) >> 1) - 128;
+    pDst[6] = ((pSrc1[12 * 3] + pSrc1[13 * 3]) >> 1) - 128; pDst[7] = ((pSrc1[14 * 3] + pSrc1[15 * 3]) >> 1) - 128;
   }
 }
 
@@ -616,6 +617,7 @@ void jpeg_encoder::put_bits(uint bits, uint len)
 
 void jpeg_encoder::code_coefficients_pass_one(int component_num)
 {
+  if (component_num >= 3) return; // just to shut up static analysis
   int i, run_len, nbits, temp1;
   int16 *src = m_coefficient_array;
   uint32 *dc_count = component_num ? m_huff_count[0 + 1] : m_huff_count[0 + 0], *ac_count = component_num ? m_huff_count[2 + 1] : m_huff_count[2 + 0];
@@ -784,8 +786,11 @@ bool jpeg_encoder::process_end_of_image()
 {
   if (m_mcu_y_ofs)
   {
-    for (int i = m_mcu_y_ofs; i < m_mcu_y; i++)
-      memcpy(m_mcu_lines[i], m_mcu_lines[m_mcu_y_ofs - 1], m_image_bpl_mcu);
+    if (m_mcu_y_ofs < 16) // check here just to shut up static analysis
+    {
+      for (int i = m_mcu_y_ofs; i < m_mcu_y; i++)
+        memcpy(m_mcu_lines[i], m_mcu_lines[m_mcu_y_ofs - 1], m_image_bpl_mcu);
+    }
 
     process_mcu_row();
   }
@@ -821,15 +826,16 @@ void jpeg_encoder::load_mcu(const void *pSrc)
       Y_to_YCC(pDst, Psrc, m_image_x);
   }
 
+  // Possibly duplicate pixels at end of scanline if not a multiple of 8 or 16
   if (m_num_components == 1)
     memset(m_mcu_lines[m_mcu_y_ofs] + m_image_bpl_xlt, pDst[m_image_bpl_xlt - 1], m_image_x_mcu - m_image_x);
   else
   {
     const uint8 y = pDst[m_image_bpl_xlt - 3 + 0], cb = pDst[m_image_bpl_xlt - 3 + 1], cr = pDst[m_image_bpl_xlt - 3 + 2];
-    uint8 *pDst = m_mcu_lines[m_mcu_y_ofs] + m_image_bpl_xlt;
+    uint8 *q = m_mcu_lines[m_mcu_y_ofs] + m_image_bpl_xlt;
     for (int i = m_image_x; i < m_image_x_mcu; i++)
     {
-      *pDst++ = y; *pDst++ = cb; *pDst++ = cr;
+      *q++ = y; *q++ = cb; *q++ = cr;
     }
   }
 
@@ -924,6 +930,7 @@ public:
          {
             m_bStatus = false;
          }
+         m_pFile = NULL;
       }
       return m_bStatus;
    }
@@ -997,12 +1004,12 @@ public:
    }
 };
 
-bool compress_image_to_jpeg_file_in_memory(void *pBuf, int &buf_size, int width, int height, int num_channels, const uint8 *pImage_data, const params &comp_params)
+bool compress_image_to_jpeg_file_in_memory(void *pDstBuf, int &buf_size, int width, int height, int num_channels, const uint8 *pImage_data, const params &comp_params)
 {
-   if ((!pBuf) || (!buf_size))
+   if ((!pDstBuf) || (!buf_size))
       return false;
 
-   memory_stream dst_stream(pBuf, buf_size);
+   memory_stream dst_stream(pDstBuf, buf_size);
 
    buf_size = 0;
 
@@ -1014,8 +1021,8 @@ bool compress_image_to_jpeg_file_in_memory(void *pBuf, int &buf_size, int width,
    {
      for (int i = 0; i < height; i++)
      {
-        const uint8* pBuf = pImage_data + i * width * num_channels;
-        if (!dst_image.process_scanline(pBuf))
+        const uint8* pScanline = pImage_data + i * width * num_channels;
+        if (!dst_image.process_scanline(pScanline))
            return false;
      }
      if (!dst_image.process_scanline(NULL))

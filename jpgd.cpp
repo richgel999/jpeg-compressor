@@ -1,7 +1,7 @@
 // jpgd.cpp - C++ class for JPEG decompression.
 // Public domain, Rich Geldreich <richgel99@gmail.com>
-// Last updated Apr. 16, 2011
 // Alex Evans: Linear memory allocator (taken from jpge.h).
+// v1.04, May. 19, 2012: Code tweaks to fix VS2008 static code analysis warnings (all looked harmless)
 //
 // Supports progressive and baseline sequential JPEG image files, and the most common chroma subsampling factors: Y, H1V1, H2V1, H1V2, and H2V2.
 //
@@ -246,7 +246,7 @@ void idct(const jpgd_block_t* pSrc_ptr, uint8* pDst_ptr, int block_max_zag)
   JPGD_ASSERT(block_max_zag >= 1);
   JPGD_ASSERT(block_max_zag <= 64);
 
-  if (block_max_zag == 1)
+  if (block_max_zag <= 1)
   {
     int k = ((pSrc_ptr[0] + 4) >> 3) + 128;
     k = CLAMP(k);
@@ -565,7 +565,8 @@ inline int jpeg_decoder::huff_decode(huff_tables *pH, int& extra_bits)
 static const int s_extend_test[16] = { 0, 0x0001, 0x0002, 0x0004, 0x0008, 0x0010, 0x0020, 0x0040, 0x0080, 0x0100, 0x0200, 0x0400, 0x0800, 0x1000, 0x2000, 0x4000 };
 static const int s_extend_offset[16] = { 0, ((-1)<<1) + 1, ((-1)<<2) + 1, ((-1)<<3) + 1, ((-1)<<4) + 1, ((-1)<<5) + 1, ((-1)<<6) + 1, ((-1)<<7) + 1, ((-1)<<8) + 1, ((-1)<<9) + 1, ((-1)<<10) + 1, ((-1)<<11) + 1, ((-1)<<12) + 1, ((-1)<<13) + 1, ((-1)<<14) + 1, ((-1)<<15) + 1 };
 static const int s_extend_mask[] = { 0, (1<<0), (1<<1), (1<<2), (1<<3), (1<<4), (1<<5), (1<<6), (1<<7), (1<<8), (1<<9), (1<<10), (1<<11), (1<<12), (1<<13), (1<<14), (1<<15), (1<<16) };
-#define HUFF_EXTEND(x,s) ((x) < s_extend_test[s] ? (x) + s_extend_offset[s] : (x))
+// The logical AND's in this macro are to shut up static code analysis (aren't really necessary - couldn't find another way to do this)
+#define JPGD_HUFF_EXTEND(x, s) (((x) < s_extend_test[s & 15]) ? ((x) + s_extend_offset[s & 15]) : (x))
 
 // Clamps a value between 0-255.
 inline uint8 jpeg_decoder::clamp(int i)
@@ -849,9 +850,9 @@ void jpeg_decoder::free_all_blocks()
   m_pMem_blocks = NULL;
 }
 
-// This method handles all errors.
+// This method handles all errors. It will never return.
 // It could easily be changed to use C++ exceptions.
-void jpeg_decoder::stop_decoding(jpgd_status status)
+JPGD_NORETURN void jpeg_decoder::stop_decoding(jpgd_status status)
 {
   m_error_code = status;
   free_all_blocks();
@@ -875,7 +876,7 @@ void *jpeg_decoder::alloc(size_t nSize, bool zero)
   {
     int capacity = JPGD_MAX(32768 - 256, (nSize + 2047) & ~2047);
     mem_block *b = (mem_block*)jpgd_malloc(sizeof(mem_block) + capacity);
-    if (!b) stop_decoding(JPGD_NOTENOUGHMEM);
+    if (!b) { stop_decoding(JPGD_NOTENOUGHMEM); }
     b->m_pNext = m_pMem_blocks; m_pMem_blocks = b;
     b->m_used_count = nSize;
     b->m_size = capacity;
@@ -1536,7 +1537,9 @@ void jpeg_decoder::transform_mcu_expand(int mcu_row)
     JPGD_ASSERT(m_mcu_block_max_zag[mcu_block] >= 1);
     JPGD_ASSERT(m_mcu_block_max_zag[mcu_block] <= 64);
 
-    switch (s_max_rc[m_mcu_block_max_zag[mcu_block++] - 1])
+    int max_zag = m_mcu_block_max_zag[mcu_block++] - 1; 
+    if (max_zag <= 0) max_zag = 0; // should never happen, only here to shut up static analysis
+    switch (s_max_rc[max_zag])
     {
     case 1*16+1:
       DCT_Upsample::P_Q<1, 1>::calc(P, Q, pSrc_ptr);
@@ -1771,7 +1774,7 @@ void jpeg_decoder::decode_next_row()
 
       int r, s;
       s = huff_decode(m_pHuff_tabs[m_comp_dc_tab[component_id]], r);
-      s = HUFF_EXTEND(r, s);
+      s = JPGD_HUFF_EXTEND(r, s);
 
       m_last_dc_val[component_id] = (s += m_last_dc_val[component_id]);
 
@@ -1807,8 +1810,8 @@ void jpeg_decoder::decode_next_row()
 
             k += r;
           }
-
-          s = HUFF_EXTEND(extra_bits, s);
+          
+          s = JPGD_HUFF_EXTEND(extra_bits, s);
 
           JPGD_ASSERT(k < 64);
 
@@ -2550,8 +2553,11 @@ void jpeg_decoder::init_frame()
   m_expanded_blocks_per_component = m_comp_h_samp[0] * m_comp_v_samp[0];
   m_expanded_blocks_per_mcu = m_expanded_blocks_per_component * m_comps_in_frame;
   m_expanded_blocks_per_row = m_max_mcus_per_row * m_expanded_blocks_per_mcu;
-	// Freq. domain chroma upsampling is only supported for H2V2 subsampling factor.
-  m_freq_domain_chroma_upsample = (JPGD_SUPPORT_FREQ_DOMAIN_UPSAMPLING != 0) && (m_expanded_blocks_per_mcu == 4*3);
+	// Freq. domain chroma upsampling is only supported for H2V2 subsampling factor (the most common one I've seen).
+  m_freq_domain_chroma_upsample = false;
+#if JPGD_SUPPORT_FREQ_DOMAIN_UPSAMPLING
+  m_freq_domain_chroma_upsample = (m_expanded_blocks_per_mcu == 4*3);
+#endif
 
   if (m_freq_domain_chroma_upsample)
     m_pSample_buf = (uint8 *)alloc(m_expanded_blocks_per_row * 64);
@@ -2598,7 +2604,7 @@ void jpeg_decoder::decode_block_dc_first(jpeg_decoder *pD, int component_id, int
   if ((s = pD->huff_decode(pD->m_pHuff_tabs[pD->m_comp_dc_tab[component_id]])) != 0)
   {
     r = pD->get_bits_no_markers(s);
-    s = HUFF_EXTEND(r, s);
+    s = JPGD_HUFF_EXTEND(r, s);
   }
 
   pD->m_last_dc_val[component_id] = (s += pD->m_last_dc_val[component_id]);
@@ -2641,7 +2647,7 @@ void jpeg_decoder::decode_block_ac_first(jpeg_decoder *pD, int component_id, int
         pD->stop_decoding(JPGD_DECODE_ERROR);
 
       r = pD->get_bits_no_markers(s);
-      s = HUFF_EXTEND(r, s);
+      s = JPGD_HUFF_EXTEND(r, s);
 
       p[g_ZAG[k]] = static_cast<jpgd_block_t>(s << pD->m_successive_low);
     }
@@ -2673,9 +2679,11 @@ void jpeg_decoder::decode_block_ac_refine(jpeg_decoder *pD, int component_id, in
   int p1 = 1 << pD->m_successive_low;
   int m1 = (-1) << pD->m_successive_low;
   jpgd_block_t *p = pD->coeff_buf_getp(pD->m_ac_coeffs[component_id], block_x, block_y);
-
+  
+  JPGD_ASSERT(pD->m_spectral_end <= 63);
+  
   k = pD->m_spectral_start;
-
+  
   if (pD->m_eob_run == 0)
   {
     for ( ; k <= pD->m_spectral_end; k++)
@@ -2710,7 +2718,7 @@ void jpeg_decoder::decode_block_ac_refine(jpeg_decoder *pD, int component_id, in
 
       do
       {
-        jpgd_block_t *this_coef = p + g_ZAG[k];
+        jpgd_block_t *this_coef = p + g_ZAG[k & 63];
 
         if (*this_coef != 0)
         {
@@ -2746,7 +2754,7 @@ void jpeg_decoder::decode_block_ac_refine(jpeg_decoder *pD, int component_id, in
   {
     for ( ; k <= pD->m_spectral_end; k++)
     {
-      jpgd_block_t *this_coef = p + g_ZAG[k];
+      jpgd_block_t *this_coef = p + g_ZAG[k & 63]; // logical AND to shut up static code analysis
 
       if (*this_coef != 0)
       {
