@@ -2229,7 +2229,10 @@ void jpeg_decoder::make_huff_table(int index, huff_tables *pH)
   for (l = 1; l <= 16; l++)
   {
     for (i = 1; i <= m_huff_num[index][l]; i++)
+    {
+      JPGD_ASSERT(p < 257);
       huffsize[p++] = static_cast<uint8>(l);
+    }
   }
 
   huffsize[p] = 0;
@@ -2244,6 +2247,7 @@ void jpeg_decoder::make_huff_table(int index, huff_tables *pH)
   {
     while (huffsize[p] == si)
     {
+      JPGD_ASSERT(p < 257);
       huffcode[p++] = code;
       code++;
     }
