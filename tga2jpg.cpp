@@ -1,13 +1,19 @@
 // tga2jpg.cpp - jpge/jpgd example command line app.
-// Public domain, Rich Geldreich <richgel99@gmail.com>
+// Public domain, Richard Geldreich <richgel99@gmail.com>
 // Last updated May. 19, 2012
 
 // Note: jpge.cpp/h and jpgd.cpp/h are completely standalone, i.e. they do not have any dependencies to each other.
 #include "jpge.h"
 #include "jpgd.h"
-#include "stb_image.c"
+#define STB_IMAGE_IMPLEMENTATION
+#include "stb_image.h"
+#define STB_IMAGE_WRITE_IMPLEMENTATION
+#include "stb_image_write.h"
 #include "timer.h"
 #include <ctype.h>
+
+typedef unsigned int uint;
+typedef unsigned char uint8;
 
 #if defined(_MSC_VER)
   #define strcasecmp _stricmp
@@ -33,7 +39,7 @@ static int print_usage()
   printf("-h1v1, -h2v1, -h2v2: Chroma subsampling (default is either Y-only or H2V2)\n");
   printf("-m: Test mem to mem compression (instead of mem to file)\n");
   printf("-wfilename.tga: Write decompressed image to filename.tga\n");
-  printf("-s: Use stb_image.c to decompress JPEG image, instead of jpgd.cpp\n");
+  printf("-s: Use stb_image.h to decompress JPEG image, instead of jpgd.cpp\n");
   printf("\nExample usages:\n");
   printf("Test compression: jpge orig.png comp.jpg 90\n");
   printf("Test decompression: jpge -d comp.jpg uncomp.tga\n");

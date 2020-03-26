@@ -1,5 +1,24 @@
-// jpge.cpp - C++ class for JPEG compression.
-// Public domain, Rich Geldreich <richgel99@gmail.com>
+// jpge.cpp - C++ class for JPEG compression. Richard Geldreich <richgel99@gmail.com>
+// Supports grayscale, H1V1, H2V1, and H2V2 chroma subsampling factors, one or two pass Huffman table optimization, libjpeg-style quality 1-100 quality factors.
+// Also supports using luma quantization tables for chroma.
+//
+// Released under two licenses. You are free to choose which license you want:
+// License 1: 
+// Public Domain
+//
+// License 2:
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//    http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+//
 // v1.01, Dec. 18, 2010 - Initial release
 // v1.02, Apr. 6, 2011 - Removed 2x2 ordered dither in H2V1 chroma subsampling method load_block_16_8_8(). (The rounding factor was 2, when it should have been 1. Either way, it wasn't helping.)
 // v1.03, Apr. 16, 2011 - Added support for optimized Huffman code tables, optimized dynamic memory allocation down to only 1 alloc.
@@ -7,6 +26,7 @@
 // v1.04, May. 19, 2012: Forgot to set m_pFile ptr to NULL in cfile_stream::close(). Thanks to Owen Kaluza for reporting this bug.
 //                       Code tweaks to fix VS2008 static code analysis warnings (all looked harmless).
 //                       Code review revealed method load_block_16_8_8() (used for the non-default H2V1 sampling mode to downsample chroma) somehow didn't get the rounding factor fix from v1.02.
+// v1.05, March 25, 2020: Added Apache 2.0 alternate license
 
 #include "jpge.h"
 
