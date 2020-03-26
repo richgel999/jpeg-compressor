@@ -132,9 +132,8 @@ namespace jpgd {
 	{
 		static void idct(int* pTemp, const jpgd_block_t* pSrc)
 		{
-#ifdef _MSC_VER
-			pTemp; pSrc;
-#endif
+			(void)pTemp; 
+			(void)pSrc;
 		}
 	};
 
@@ -580,7 +579,7 @@ namespace jpgd {
 	// Tables and macro used to fully decode the DPCM differences.
 	static const int s_extend_test[16] = { 0, 0x0001, 0x0002, 0x0004, 0x0008, 0x0010, 0x0020, 0x0040, 0x0080, 0x0100, 0x0200, 0x0400, 0x0800, 0x1000, 0x2000, 0x4000 };
 	static const int s_extend_offset[16] = { 0, -1, -3, -7, -15, -31, -63, -127, -255, -511, -1023, -2047, -4095, -8191, -16383, -32767 };
-	static const int s_extend_mask[] = { 0, (1 << 0), (1 << 1), (1 << 2), (1 << 3), (1 << 4), (1 << 5), (1 << 6), (1 << 7), (1 << 8), (1 << 9), (1 << 10), (1 << 11), (1 << 12), (1 << 13), (1 << 14), (1 << 15), (1 << 16) };
+	//static const int s_extend_mask[] = { 0, (1 << 0), (1 << 1), (1 << 2), (1 << 3), (1 << 4), (1 << 5), (1 << 6), (1 << 7), (1 << 8), (1 << 9), (1 << 10), (1 << 11), (1 << 12), (1 << 13), (1 << 14), (1 << 15), (1 << 16) };
 
 #define JPGD_HUFF_EXTEND(x, s) (((x) < s_extend_test[s & 15]) ? ((x) + s_extend_offset[s & 15]) : (x))
 
