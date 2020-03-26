@@ -2893,6 +2893,10 @@ namespace jpgd {
 			m_ac_coeffs[i] = coeff_buf_open(m_max_mcus_per_row * m_comp_h_samp[i], m_max_mcus_per_col * m_comp_v_samp[i], 8, 8);
 		}
 
+		// See https://libjpeg-turbo.org/pmwiki/uploads/About/TwoIssueswiththeJPEGStandard.pdf
+		uint32_t total_scans = 0;
+		const uint32_t MAX_SCANS_TO_PROCESS = 1000;
+
 		for (; ; )
 		{
 			int dc_only_scan, refinement_scan;
@@ -2938,6 +2942,10 @@ namespace jpgd {
 			m_bits_left = 16;
 			get_bits(16);
 			get_bits(16);
+
+			total_scans++;
+			if (total_scans > MAX_SCANS_TO_PROCESS)
+				stop_decoding(JPGD_TOO_MANY_SCANS);
 		}
 
 		m_comps_in_scan = m_comps_in_frame;
