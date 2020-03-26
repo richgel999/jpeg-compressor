@@ -463,8 +463,6 @@ namespace jpge {
 		return true;
 	}
 
-#include <stdio.h>
-
 	bool jpeg_encoder::jpg_open(int p_x_res, int p_y_res, int src_channels)
 	{
 		m_num_components = 3;
