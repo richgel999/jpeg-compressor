@@ -6,6 +6,7 @@
 #include "jpge.h"
 #include "jpgd.h"
 #define STB_IMAGE_IMPLEMENTATION
+//#define STBI_NO_SIMD
 #include "stb_image.h"
 #define STB_IMAGE_WRITE_IMPLEMENTATION
 #include "stb_image_write.h"
@@ -41,6 +42,8 @@ static int print_usage()
 	printf("-wfilename.tga: Write decompressed image to filename.tga\n");
 	printf("-s: Use stb_image.h to decompress JPEG image, instead of jpgd.cpp\n");
 	printf("-q: Use traditional JPEG Annex K quantization tables, instead of mozjpeg's default tables\n");
+	printf("-no_simd: Don't use SIMD instructions\n");
+	printf("-box_filtering: Use box filtering for chroma, instead of linear (decompression only)\n");
 	printf("\nExample usages:\n");
 	printf("Test compression: jpge orig.png comp.jpg 90\n");
 	printf("Test decompression: jpge -d comp.jpg uncomp.tga\n");
@@ -275,18 +278,44 @@ failure:
 }
 
 // Test JPEG file decompression using jpgd.h
-static int test_jpgd(const char* pSrc_filename, const char* pDst_filename)
+static int test_jpgd(const char* pSrc_filename, const char* pDst_filename, bool use_jpgd, bool no_simd, bool box_filtering)
 {
 	// Load the source JPEG image.
-	const int req_comps = 3; // request RGB image
+	const int req_comps = 4; // request RGB image
 	int width = 0, height = 0, actual_comps = 0;
+
+	if (use_jpgd)
+		printf("Using jpgd::decompress_jpeg_image_from_file\n");
+	else
+		printf("Using stbi_load\n");
 
 	timer tm;
 	tm.start();
+	
+	uint8* pImage_data;
 
-	uint8* pImage_data = jpgd::decompress_jpeg_image_from_file(pSrc_filename, &width, &height, &actual_comps, req_comps);
+	// Set N > 1 to load the image multiple times, for profiling.
+	const int N = 1;
+	for (int t = 0; t < N; t++)
+	{
+		if (use_jpgd)
+		{
+			pImage_data = jpgd::decompress_jpeg_image_from_file(pSrc_filename, &width, &height, &actual_comps, req_comps, 
+				(no_simd ? jpgd::jpeg_decoder::cFlagDisableSIMD : 0) |
+				(box_filtering ? jpgd::jpeg_decoder::cFlagBoxChromaFiltering : 0) );
+		}
+		else
+		{
+			
+			pImage_data = stbi_load(pSrc_filename, &width, &height, &actual_comps, req_comps);
+		}
+
+		if (t != (N - 1))
+			free(pImage_data);
+	}
 
 	tm.stop();
+	//exit(0);
 
 	if (!pImage_data)
 	{
@@ -325,67 +354,80 @@ int main(int arg_c, char* ppArgs[])
 	bool use_jpgd = true;
 	bool test_jpgd_decompression = false;
 	bool use_traditional_quant_tables = false;
+	bool no_simd = false;
+	bool box_filtering = false;
 
 	int arg_index = 1;
 	while ((arg_index < arg_c) && (ppArgs[arg_index][0] == '-'))
 	{
-		switch (tolower(ppArgs[arg_index][1]))
+		if (strcasecmp(ppArgs[arg_index], "-no_simd") == 0)
 		{
-		case 'd':
-			test_jpgd_decompression = true;
-			break;
-		case 'g':
-			strcpy_s(s_log_filename, sizeof(s_log_filename), &ppArgs[arg_index][2]);
-			break;
-		case 'x':
-			run_exhausive_test = true;
-			break;
-		case 'm':
-			test_memory_compression = true;
-			break;
-		case 'o':
-			optimize_huffman_tables = true;
-			break;
-		case 'l':
-			if (strcasecmp(&ppArgs[arg_index][1], "luma") == 0)
-				subsampling = jpge::Y_ONLY;
-			else
+			no_simd = true;
+		}
+		else if (strcasecmp(ppArgs[arg_index], "-box_filtering") == 0)
+		{
+			box_filtering = true;
+		}
+		else
+		{
+			switch (tolower(ppArgs[arg_index][1]))
 			{
+			case 'd':
+				test_jpgd_decompression = true;
+				break;
+			case 'g':
+				strcpy_s(s_log_filename, sizeof(s_log_filename), &ppArgs[arg_index][2]);
+				break;
+			case 'x':
+				run_exhausive_test = true;
+				break;
+			case 'm':
+				test_memory_compression = true;
+				break;
+			case 'o':
+				optimize_huffman_tables = true;
+				break;
+			case 'l':
+				if (strcasecmp(&ppArgs[arg_index][1], "luma") == 0)
+					subsampling = jpge::Y_ONLY;
+				else
+				{
+					log_printf("Unrecognized option: %s\n", ppArgs[arg_index]);
+					return EXIT_FAILURE;
+				}
+				break;
+			case 'h':
+				if (strcasecmp(&ppArgs[arg_index][1], "h1v1") == 0)
+					subsampling = jpge::H1V1;
+				else if (strcasecmp(&ppArgs[arg_index][1], "h2v1") == 0)
+					subsampling = jpge::H2V1;
+				else if (strcasecmp(&ppArgs[arg_index][1], "h2v2") == 0)
+					subsampling = jpge::H2V2;
+				else
+				{
+					log_printf("Unrecognized subsampling: %s\n", ppArgs[arg_index]);
+					return EXIT_FAILURE;
+				}
+				break;
+			case 'w':
+			{
+				strcpy_s(output_filename, sizeof(output_filename), &ppArgs[arg_index][2]);
+				break;
+			}
+			case 's':
+			{
+				use_jpgd = false;
+				break;
+			}
+			case 'q':
+			{
+				use_traditional_quant_tables = true;
+				break;
+			}
+			default:
 				log_printf("Unrecognized option: %s\n", ppArgs[arg_index]);
 				return EXIT_FAILURE;
 			}
-			break;
-		case 'h':
-			if (strcasecmp(&ppArgs[arg_index][1], "h1v1") == 0)
-				subsampling = jpge::H1V1;
-			else if (strcasecmp(&ppArgs[arg_index][1], "h2v1") == 0)
-				subsampling = jpge::H2V1;
-			else if (strcasecmp(&ppArgs[arg_index][1], "h2v2") == 0)
-				subsampling = jpge::H2V2;
-			else
-			{
-				log_printf("Unrecognized subsampling: %s\n", ppArgs[arg_index]);
-				return EXIT_FAILURE;
-			}
-			break;
-		case 'w':
-		{
-			strcpy_s(output_filename, sizeof(output_filename), &ppArgs[arg_index][2]);
-			break;
-		}
-		case 's':
-		{
-			use_jpgd = false;
-			break;
-		}
-		case 'q':
-		{
-			use_traditional_quant_tables = true;
-			break;
-		}
-		default:
-			log_printf("Unrecognized option: %s\n", ppArgs[arg_index]);
-			return EXIT_FAILURE;
 		}
 		arg_index++;
 	}
@@ -411,7 +453,7 @@ int main(int arg_c, char* ppArgs[])
 
 		const char* pSrc_filename = ppArgs[arg_index++];
 		const char* pDst_filename = ppArgs[arg_index++];
-		return test_jpgd(pSrc_filename, pDst_filename);
+		return test_jpgd(pSrc_filename, pDst_filename, use_jpgd, no_simd, box_filtering);
 	}
 
 	// Test jpge
@@ -509,12 +551,23 @@ int main(int arg_c, char* ppArgs[])
 	// Now try loading the JPEG file using jpgd or stbi_image's JPEG decompressor.
 	int uncomp_width = 0, uncomp_height = 0, uncomp_actual_comps = 0, uncomp_req_comps = 3;
 
+	if (use_jpgd)
+		printf("Using jpgd::decompress_jpeg_image_from_file\n");
+	else
+		printf("Using stbi_load\n");
+
 	tm.start();
 	uint8* pUncomp_image_data;
 	if (use_jpgd)
-		pUncomp_image_data = jpgd::decompress_jpeg_image_from_file(pDst_filename, &uncomp_width, &uncomp_height, &uncomp_actual_comps, uncomp_req_comps);
+	{
+		pUncomp_image_data = jpgd::decompress_jpeg_image_from_file(pDst_filename, &uncomp_width, &uncomp_height, &uncomp_actual_comps, uncomp_req_comps, 
+			(no_simd ? jpgd::jpeg_decoder::cFlagDisableSIMD : 0) |
+			(box_filtering ? jpgd::jpeg_decoder::cFlagBoxChromaFiltering : 0) );
+	}
 	else
+	{
 		pUncomp_image_data = stbi_load(pDst_filename, &uncomp_width, &uncomp_height, &uncomp_actual_comps, uncomp_req_comps);
+	}
 
 	double total_uncomp_time = tm.get_elapsed_ms();
 

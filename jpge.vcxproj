@@ -177,6 +177,7 @@
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="jpgd.h" />
+    <ClInclude Include="jpgd_idct.h" />
     <ClInclude Include="jpge.h" />
     <ClInclude Include="timer.h" />
   </ItemGroup>
