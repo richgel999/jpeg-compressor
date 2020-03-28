@@ -81,6 +81,11 @@ namespace jpgd {
 
 #define CLAMP(i) ((static_cast<uint>(i) > 255) ? (((~i) >> 31) & 0xFF) : (i))
 
+	static inline int left_shifti(int val, uint32_t bits)
+	{
+		return static_cast<int>(static_cast<uint32_t>(val) << bits);
+	}
+
 	// Compiler creates a fast path 1D IDCT for X non-zero columns
 	template <int NONZERO_COLS>
 	struct Row
@@ -96,8 +101,8 @@ namespace jpgd {
 			const int tmp2 = z1 + MULTIPLY(z3, -FIX_1_847759065);
 			const int tmp3 = z1 + MULTIPLY(z2, FIX_0_765366865);
 
-			const int tmp0 = (ACCESS_COL(0) + ACCESS_COL(4)) << CONST_BITS;
-			const int tmp1 = (ACCESS_COL(0) - ACCESS_COL(4)) << CONST_BITS;
+			const int tmp0 = left_shifti(ACCESS_COL(0) + ACCESS_COL(4), CONST_BITS);
+			const int tmp1 = left_shifti(ACCESS_COL(0) - ACCESS_COL(4), CONST_BITS);
 
 			const int tmp10 = tmp0 + tmp3, tmp13 = tmp0 - tmp3, tmp11 = tmp1 + tmp2, tmp12 = tmp1 - tmp2;
 
@@ -142,7 +147,7 @@ namespace jpgd {
 	{
 		static void idct(int* pTemp, const jpgd_block_t* pSrc)
 		{
-			const int dcval = (pSrc[0] << PASS1_BITS);
+			const int dcval = left_shifti(pSrc[0], PASS1_BITS);
 
 			pTemp[0] = dcval;
 			pTemp[1] = dcval;
@@ -171,8 +176,8 @@ namespace jpgd {
 			const int tmp2 = z1 + MULTIPLY(z3, -FIX_1_847759065);
 			const int tmp3 = z1 + MULTIPLY(z2, FIX_0_765366865);
 
-			const int tmp0 = (ACCESS_ROW(0) + ACCESS_ROW(4)) << CONST_BITS;
-			const int tmp1 = (ACCESS_ROW(0) - ACCESS_ROW(4)) << CONST_BITS;
+			const int tmp0 = left_shifti(ACCESS_ROW(0) + ACCESS_ROW(4), CONST_BITS);
+			const int tmp1 = left_shifti(ACCESS_ROW(0) - ACCESS_ROW(4), CONST_BITS);
 
 			const int tmp10 = tmp0 + tmp3, tmp13 = tmp0 - tmp3, tmp11 = tmp1 + tmp2, tmp12 = tmp1 - tmp2;
 
