@@ -23,6 +23,9 @@
 // v1.04, May. 19, 2012: Code tweaks to fix VS2008 static code analysis warnings
 // v2.00, March 20, 2020: Fuzzed with zzuf and afl. Fixed several issues, converted most assert()'s to run-time checks. Added chroma upsampling. Removed freq. domain upsampling. gcc/clang warnings.
 //
+// Important:
+// #define JPGD_USE_SSE2 to 0 to completely disable SSE2 usage.
+//
 #include "jpgd.h"
 #include <string.h>
 #include <algorithm>
@@ -33,7 +36,19 @@
 #endif
 
 #ifndef JPGD_USE_SSE2
-#define JPGD_USE_SSE2 (1)
+
+	#if defined(__GNUC__) 
+
+		#if (defined(__x86_64__) || defined(_M_X64)) 
+			#if defined(__SSE2__)
+				#define JPGD_USE_SSE2 (1)
+			#endif
+		#endif
+
+	#else
+		#define JPGD_USE_SSE2 (1)
+	#endif
+
 #endif
 
 #define JPGD_TRUE (1)
