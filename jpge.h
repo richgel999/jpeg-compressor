@@ -1,5 +1,5 @@
 // jpge.h - C++ class for JPEG compression.
-// Public domain, Richard Geldreich <richgel99@gmail.com>
+// Public Domain or Apache 2.0, Richard Geldreich <richgel99@gmail.com>
 // Alex Evans: Added RGBA support, linear memory allocator.
 #ifndef JPEG_ENCODER_H
 #define JPEG_ENCODER_H
