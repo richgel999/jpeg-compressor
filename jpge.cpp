@@ -85,6 +85,11 @@ namespace jpge {
 	const int YR = 19595, YG = 38470, YB = 7471, CB_R = -11059, CB_G = -21709, CB_B = 32768, CR_R = 32768, CR_G = -27439, CR_B = -5329;
 	static inline uint8 clamp(int i) { if (static_cast<uint>(i) > 255U) { if (i < 0) i = 0; else if (i > 255) i = 255; } return static_cast<uint8>(i); }
 
+	static inline int left_shifti(int val, uint32 bits)
+	{
+		return static_cast<int>(static_cast<uint32>(val) << bits);
+	}
+
 	static void RGB_to_YCC(uint8* pDst, const uint8* pSrc, int num_pixels)
 	{
 		for (; num_pixels; pDst += 3, pSrc += 3, num_pixels--)
@@ -151,8 +156,8 @@ namespace jpge {
 		{
 			int32 s0 = q[0], s1 = q[1], s2 = q[2], s3 = q[3], s4 = q[4], s5 = q[5], s6 = q[6], s7 = q[7];
 			DCT1D(s0, s1, s2, s3, s4, s5, s6, s7);
-			q[0] = s0 << ROW_BITS; q[1] = DCT_DESCALE(s1, CONST_BITS - ROW_BITS); q[2] = DCT_DESCALE(s2, CONST_BITS - ROW_BITS); q[3] = DCT_DESCALE(s3, CONST_BITS - ROW_BITS);
-			q[4] = s4 << ROW_BITS; q[5] = DCT_DESCALE(s5, CONST_BITS - ROW_BITS); q[6] = DCT_DESCALE(s6, CONST_BITS - ROW_BITS); q[7] = DCT_DESCALE(s7, CONST_BITS - ROW_BITS);
+			q[0] = left_shifti(s0, ROW_BITS); q[1] = DCT_DESCALE(s1, CONST_BITS - ROW_BITS); q[2] = DCT_DESCALE(s2, CONST_BITS - ROW_BITS); q[3] = DCT_DESCALE(s3, CONST_BITS - ROW_BITS);
+			q[4] = left_shifti(s4, ROW_BITS); q[5] = DCT_DESCALE(s5, CONST_BITS - ROW_BITS); q[6] = DCT_DESCALE(s6, CONST_BITS - ROW_BITS); q[7] = DCT_DESCALE(s7, CONST_BITS - ROW_BITS);
 		}
 		for (q = p, c = 7; c >= 0; c--, q++)
 		{
