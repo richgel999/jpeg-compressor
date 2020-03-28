@@ -37,13 +37,19 @@ Include [jpgd.h](https://github.com/orian/jpeg-compressor/blob/master/jpgd.h) an
 // On return, width/height will be set to the image's dimensions, and actual_comps will be set 
 // to either 1 (grayscale) or 3 (RGB).
 unsigned char *decompress_jpeg_image_from_memory(const unsigned char *pSrc_data, int src_data_size, 
-                                     int *width, int *height, int *actual_comps, int req_comps);
+                                     int *width, int *height, int *actual_comps, int req_comps, uint32_t flags = 0);
 
 // Loads a JPEG image from a file.
 unsigned char *decompress_jpeg_image_from_file(const char *pSrc_filename, int *width, int *height, 
-                                     int *actual_comps, int req_comps);
+                                     int *actual_comps, int req_comps, uint32_t flags = 0);
 ```
 Just like the compressor, for more control you can directly utilize the jpgd::jpeg_decompressor class, or call the decompress_jpeg_image_from_stream() function.
+
+The optional flags are: 
+
+`cFlagBoxChromaFiltering`: Uses much faster box filtering on the chroma components, but may lead to artifacts on some images
+
+`cFlagDisableSIMD`: Do not use SSE2, even if it's been compiled in
 
 Set the "JPGD_USE_SSE2" macro to 0 to completely disable SSE2 usage during compilation. By default, it's enabled (unless it's x86/x64 gcc and __SSE2__ is not defined).
 
