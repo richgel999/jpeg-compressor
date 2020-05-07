@@ -2124,7 +2124,7 @@ namespace jpgd {
 
 	int jpeg_decoder::decode_next_mcu_row()
 	{
-		if (setjmp(m_jmp_state))
+		if (::setjmp(m_jmp_state))
 			return JPGD_FAILED;
 
 		const bool chroma_y_filtering = ((m_flags & cFlagBoxChromaFiltering) == 0) && ((m_scan_type == JPGD_YH2V2) || (m_scan_type == JPGD_YH1V2));
@@ -3040,7 +3040,7 @@ namespace jpgd {
 
 	jpeg_decoder::jpeg_decoder(jpeg_decoder_stream* pStream, uint32_t flags)
 	{
-		if (setjmp(m_jmp_state))
+		if (::setjmp(m_jmp_state))
 			return;
 		decode_init(pStream, flags);
 	}
@@ -3053,7 +3053,7 @@ namespace jpgd {
 		if (m_error_code)
 			return JPGD_FAILED;
 
-		if (setjmp(m_jmp_state))
+		if (::setjmp(m_jmp_state))
 			return JPGD_FAILED;
 
 		decode_start();
