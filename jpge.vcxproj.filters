@@ -29,10 +29,10 @@
     </ClCompile>
   </ItemGroup>
   <ItemGroup>
-    <ClInclude Include="jpgd.h">
+    <ClInclude Include="include/jpgd.h">
       <Filter>Header Files</Filter>
     </ClInclude>
-    <ClInclude Include="jpge.h">
+    <ClInclude Include="include/jpge.h">
       <Filter>Header Files</Filter>
     </ClInclude>
     <ClInclude Include="timer.h">
