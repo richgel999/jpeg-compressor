@@ -1597,9 +1597,88 @@ namespace jpgd {
 		uint8* d = m_pScan_line_0;
 		uint8* s = m_pSample_buf + row * 8;
 
-		for (int i = m_max_mcus_per_row; i > 0; i--)
+#if JPGD_USE_SSE2
+		if (m_has_sse2) 
 		{
-			for (int j = 0; j < 8; j++)
+			__m128i zero = _mm_setzero_si128();
+			__m128i maxClamp = _mm_set1_epi16(255);
+			__m128i resultInit = _mm_set1_epi32(0xFF000000);
+
+			for (int i = m_max_mcus_per_row; i > 0; i--) 
+			{
+				__m128i y = _mm_unpacklo_epi8(_mm_loadu_si64(s), _mm_setzero_si128());
+
+				__m128i mCrr = _mm_set_epi16((short)m_crr[s[135]], (short)m_crr[s[134]], (short)m_crr[s[133]], (short)m_crr[s[132]], (short)m_crr[s[131]], (short)m_crr[s[130]], (short)m_crr[s[129]], (short)m_crr[s[128]]);
+				__m128i mCrgLo = _mm_set_epi32(m_crg[s[131]], m_crg[s[130]], m_crg[s[129]], m_crg[s[128]]);
+				__m128i mCrgHi = _mm_set_epi32(m_crg[s[135]], m_crg[s[134]], m_crg[s[133]], m_crg[s[132]]);
+
+				__m128i mCbgLo = _mm_set_epi32(m_cbg[s[67]], m_cbg[s[66]], m_cbg[s[65]], m_cbg[s[64]]);
+				__m128i mCbgHi = _mm_set_epi32(m_cbg[s[71]], m_cbg[s[70]], m_cbg[s[69]], m_cbg[s[68]]);
+
+				__m128i mCbb = _mm_set_epi16((short)m_cbb[s[71]], (short)m_cbb[s[70]], (short)m_cbb[s[69]], (short)m_cbb[s[68]], (short)m_cbb[s[67]], (short)m_cbb[s[66]], (short)m_cbb[s[65]], (short)m_cbb[s[64]]);
+
+				__m128i mCbgLoResult = _mm_srli_epi32(_mm_add_epi32(mCrgLo, mCbgLo), 16);
+				__m128i mCbgHiResult = _mm_srli_epi32(_mm_add_epi32(mCrgHi, mCbgHi), 16);
+
+				__m128i mCrgCbgSum = _mm_set_epi16((short)mCbgHiResult.m128i_i32[3], (short)mCbgHiResult.m128i_i32[2], (short)mCbgHiResult.m128i_i32[1], (short)mCbgHiResult.m128i_i32[0],
+					(short)mCbgLoResult.m128i_i32[3], (short)mCbgLoResult.m128i_i32[2], (short)mCbgLoResult.m128i_i32[1], (short)mCbgLoResult.m128i_i32[0]);
+
+				__m128i val0 = _mm_add_epi16(y, mCrr);
+				__m128i val1 = _mm_add_epi16(y, mCrgCbgSum);
+				__m128i val2 = _mm_add_epi16(y, mCbb);
+
+				val0 = _mm_min_epi16(val0, maxClamp);
+				val0 = _mm_max_epi16(val0, zero);
+
+				val1 = _mm_min_epi16(val1, maxClamp);
+				val1 = _mm_max_epi16(val1, zero);
+
+				val2 = _mm_min_epi16(val2, maxClamp);
+				val2 = _mm_max_epi16(val2, zero);
+
+				__m128i result0 = resultInit;
+				result0 = _mm_or_si128(result0, _mm_slli_epi32(_mm_unpacklo_epi16(val2, zero), 16));
+				result0 = _mm_or_si128(result0, _mm_slli_epi32(_mm_unpacklo_epi16(val1, zero), 8));
+				result0 = _mm_or_si128(result0, _mm_unpacklo_epi16(val0, zero));
+
+				__m128i result1 = resultInit;
+				result1 = _mm_or_si128(result1, _mm_slli_epi32(_mm_unpackhi_epi16(val2, zero), 16));
+				result1 = _mm_or_si128(result1, _mm_slli_epi32(_mm_unpackhi_epi16(val1, zero), 8));
+				result1 = _mm_or_si128(result1, _mm_unpackhi_epi16(val0, zero));
+
+				_mm_storeu_si128((__m128i*)(d), result0);
+				_mm_storeu_si128((__m128i*)(d + 16), result1);
+
+				d += 32;
+
+				s += 64 * 3;
+			}
+		}
+		else 
+		{
+			for (int i = m_max_mcus_per_row; i > 0; i--) 
+			{
+				for (int j = 0; j < 8; j++) 
+				{
+					int y = s[j];
+					int cb = s[64 + j];
+					int cr = s[128 + j];
+
+					d[0] = clamp(y + m_crr[cr]);
+					d[1] = clamp(y + ((m_crg[cr] + m_cbg[cb]) >> 16));
+					d[2] = clamp(y + m_cbb[cb]);
+					d[3] = 255;
+
+					d += 4;
+				}
+
+				s += 64 * 3;
+			}
+		}
+#else
+		for (int i = m_max_mcus_per_row; i > 0; i--) 
+		{
+			for (int j = 0; j < 8; j++) 
 			{
 				int y = s[j];
 				int cb = s[64 + j];
@@ -1615,6 +1694,7 @@ namespace jpgd {
 
 			s += 64 * 3;
 		}
+#endif
 	}
 
 	// YCbCr H2V1 (2x1:1:1, 4 m_blocks per MCU) to RGB
