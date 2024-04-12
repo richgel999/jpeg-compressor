@@ -270,10 +270,16 @@ namespace jpgd
 		jpgd_status m_error_code;
 		int m_total_bytes_read;
 
+		enum simd_mode {
+			NO_SIMD,
+			SSE2,
+			AVX2
+		};
+
 		bool m_ready_flag;
 		bool m_eof_flag;
 		bool m_sample_buf_prev_valid;
-		bool m_has_sse2;
+		simd_mode m_simd_mode;
 
 		inline int check_sample_buf_ofs(int ofs) const { assert(ofs >= 0); assert(ofs < m_max_blocks_per_row * 64); return ofs; }
 		void free_all_blocks();
