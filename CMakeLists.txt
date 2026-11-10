@@ -1,65 +1,50 @@
-project(jpge)
+cmake_minimum_required(VERSION 3.15)
 
-cmake_minimum_required(VERSION 3.0)
-option(BUILD_X64 "build 64-bit" TRUE)
-option(STATIC "static linking" FALSE)
+project(jpge LANGUAGES CXX)
 
-message("Initial BUILD_X64=${BUILD_X64}")
-message("Initial CMAKE_BUILD_TYPE=${CMAKE_BUILD_TYPE}")
+if(NOT MSVC)
+    set_property(GLOBAL PROPERTY CXX_STANDARD 11)
+    
+    add_compile_options(
+        -Wall
+        -Wextra
+        -fno-strict-aliasing
+    )
+    
+    add_compile_definitions(
+        _LARGEFILE64_SOURCE=1
+        _FILE_OFFSET_BITS=64
+    )
 
-if( NOT CMAKE_BUILD_TYPE )
-  set( CMAKE_BUILD_TYPE Release )
-endif( NOT CMAKE_BUILD_TYPE )
-
-message( ${PROJECT_NAME} " build type: " ${CMAKE_BUILD_TYPE} )
-
-if (BUILD_X64)
-	message("Building 64-bit")
-else()
-	message("Building 32-bit")
-endif(BUILD_X64)
-
-if (NOT MSVC)
-   set(CMAKE_CXX_FLAGS_DEBUG "${CMAKE_CXX_FLAGS_DEBUG} -g")
-   set(CMAKE_C_FLAGS_DEBUG "${CMAKE_CXX_FLAGS_DEBUG} -g")
-
-   set(CMAKE_CXX_FLAGS_RELEASE "${CMAKE_CXX_FLAGS_RELEASE}")
-   set(CMAKE_C_FLAGS_RELEASE "${CMAKE_CXX_FLAGS_RELEASE}")
-
-   set(CMAKE_CXX_FLAGS -std=c++11)
-   set(GCC_COMPILE_FLAGS "-fno-strict-aliasing -D_LARGEFILE64_SOURCE=1 -D_FILE_OFFSET_BITS=64 -Wall -Wextra")
-
-   if (NOT BUILD_X64)
-	  set(GCC_COMPILE_FLAGS "${GCC_COMPILE_FLAGS} -m32")
-   endif()
-
-   if (STATIC)
-	  set(CMAKE_EXE_LINKER_FLAGS  "${CMAKE_EXE_LINKER_FLAGS} ${GCC_LINK_FLAGS} -static-libgcc -static-libstdc++ -static")
-   else()
-	  set(CMAKE_EXE_LINKER_FLAGS  "${CMAKE_EXE_LINKER_FLAGS} ${GCC_LINK_FLAGS} -Wl,-rpath .")
-   endif(STATIC)
-
-   set(CMAKE_C_FLAGS  "${CMAKE_C_FLAGS} ${GCC_COMPILE_FLAGS}")
-   set(CMAKE_C_FLAGS_RELEASE  "${CMAKE_C_FLAGS_RELEASE} ${GCC_COMPILE_FLAGS}")
-   set(CMAKE_C_FLAGS_DEBUG "${CMAKE_C_FLAGS_DEBUG} ${GCC_COMPILE_FLAGS} -D_DEBUG")
-
-   set(CMAKE_CXX_FLAGS  "${CMAKE_CXX_FLAGS} ${GCC_COMPILE_FLAGS}")
-   set(CMAKE_CXX_FLAGS_RELEASE  "${CMAKE_CXX_FLAGS_RELEASE} ${GCC_COMPILE_FLAGS}")
-   set(CMAKE_CXX_FLAGS_DEBUG "${CMAKE_CXX_FLAGS_DEBUG} ${GCC_COMPILE_FLAGS} -D_DEBUG")
+    if(MINGW)
+        add_compile_definitions(
+            WIN32
+        )
+    endif()
 endif()
 
-set(BASISU_SRC_LIST ${COMMON_SRC_LIST} 
-	jpgd.cpp
-	jpge.cpp
-	tga2jpg.cpp
-	timer.cpp
-	)
+# JPEG decoder
+add_library(jpgd jpgd.cpp)
+add_library(jpge::jpgd ALIAS jpgd)
+target_include_directories(jpgd
+    PUBLIC $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
+    PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
 
-set(BIN_DIRECTORY "bin")
+# JPEG encoder (compressor)
+add_library(jpge jpge.cpp)
+add_library(jpge::jpge ALIAS jpge)
+target_include_directories(jpge
+    PUBLIC $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
+    PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
 
-set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/${BIN_DIRECTORY})
+add_executable(tga2jpg tga2jpg.cpp timer.cpp)
+target_link_libraries(tga2jpg PRIVATE jpgd jpge)
 
-add_executable(jpge ${BASISU_SRC_LIST})
-
-install(TARGETS jpge DESTINATION bin)
-
+string(COMPARE EQUAL
+    "${CMAKE_SOURCE_DIR}"
+    "${CMAKE_CURRENT_SOURCE_DIR}"
+    is_top_level)
+option(jpge_INCLUDE_PACKAGING "Package jpge" ${is_top_level})
+if(jpge_INCLUDE_PACKAGING)
+    add_subdirectory(cmake/packaging)
+endif()

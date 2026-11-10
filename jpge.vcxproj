@@ -176,9 +176,9 @@
     <ClCompile Include="timer.cpp" />
   </ItemGroup>
   <ItemGroup>
-    <ClInclude Include="jpgd.h" />
+    <ClInclude Include="include/jpgd.h" />
     <ClInclude Include="jpgd_idct.h" />
-    <ClInclude Include="jpge.h" />
+    <ClInclude Include="include/jpge.h" />
     <ClInclude Include="timer.h" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
